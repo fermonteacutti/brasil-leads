@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WizardProvider, useWizard } from "@/components/search/SearchWizardContext";
 import StepBusinessType from "@/components/search/StepBusinessType";
@@ -7,9 +8,10 @@ import StepFilters from "@/components/search/StepFilters";
 import StepReview from "@/components/search/StepReview";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Rocket } from "lucide-react";
+import { ArrowLeft, ArrowRight, Rocket, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 const STEPS = [
   { label: "Negócio", component: StepBusinessType },
