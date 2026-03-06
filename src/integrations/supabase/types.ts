@@ -14,7 +14,331 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      credits: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          reference_id: string | null
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          reference_id?: string | null
+          transaction_type?: Database["public"]["Enums"]["credit_transaction_type"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          address: string | null
+          city: string | null
+          cnpj: string | null
+          company_name: string | null
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          facebook_url: string | null
+          funnel_status: Database["public"]["Enums"]["lead_funnel_status"]
+          id: string
+          instagram_url: string | null
+          linkedin_url: string | null
+          notes: string | null
+          phone: string | null
+          raw_data: Json | null
+          search_id: string | null
+          segment: string | null
+          source: string | null
+          state: string | null
+          tags: string[] | null
+          updated_at: string
+          user_id: string
+          verification_status: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          facebook_url?: string | null
+          funnel_status?: Database["public"]["Enums"]["lead_funnel_status"]
+          id?: string
+          instagram_url?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          phone?: string | null
+          raw_data?: Json | null
+          search_id?: string | null
+          segment?: string | null
+          source?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          user_id: string
+          verification_status?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          facebook_url?: string | null
+          funnel_status?: Database["public"]["Enums"]["lead_funnel_status"]
+          id?: string
+          instagram_url?: string | null
+          linkedin_url?: string | null
+          notes?: string | null
+          phone?: string | null
+          raw_data?: Json | null
+          search_id?: string | null
+          segment?: string | null
+          source?: string | null
+          state?: string | null
+          tags?: string[] | null
+          updated_at?: string
+          user_id?: string
+          verification_status?: string | null
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          annual_price: number
+          created_at: string
+          credits_per_month: number
+          description: string | null
+          features: Json
+          id: string
+          is_active: boolean
+          max_saved_leads: number | null
+          monthly_price: number
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          annual_price?: number
+          created_at?: string
+          credits_per_month?: number
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_saved_leads?: number | null
+          monthly_price?: number
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          annual_price?: number
+          created_at?: string
+          credits_per_month?: number
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_saved_leads?: number | null
+          monthly_price?: number
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          company_name: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          onboarding_completed: boolean
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          onboarding_completed?: boolean
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          onboarding_completed?: boolean
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      searches: {
+        Row: {
+          business_type: string
+          completed_at: string | null
+          created_at: string
+          credits_estimated: number
+          credits_used: number
+          error_message: string | null
+          filters: Json | null
+          id: string
+          leads_found: number
+          location_city: string | null
+          location_radius: number | null
+          location_state: string | null
+          name: string | null
+          nationwide: boolean
+          sources: string[]
+          started_at: string | null
+          status: Database["public"]["Enums"]["search_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_type: string
+          completed_at?: string | null
+          created_at?: string
+          credits_estimated?: number
+          credits_used?: number
+          error_message?: string | null
+          filters?: Json | null
+          id?: string
+          leads_found?: number
+          location_city?: string | null
+          location_radius?: number | null
+          location_state?: string | null
+          name?: string | null
+          nationwide?: boolean
+          sources?: string[]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["search_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_type?: string
+          completed_at?: string | null
+          created_at?: string
+          credits_estimated?: number
+          credits_used?: number
+          error_message?: string | null
+          filters?: Json | null
+          id?: string
+          leads_found?: number
+          location_city?: string | null
+          location_radius?: number | null
+          location_state?: string | null
+          name?: string | null
+          nationwide?: boolean
+          sources?: string[]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["search_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          billing_cycle: Database["public"]["Enums"]["billing_cycle"]
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_cycle?: Database["public"]["Enums"]["billing_cycle"]
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +347,27 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      billing_cycle: "monthly" | "annual"
+      credit_transaction_type:
+        | "plan_renewal"
+        | "purchase"
+        | "usage"
+        | "refund"
+        | "bonus"
+      lead_funnel_status: "new" | "contacted" | "proposal" | "closed" | "lost"
+      search_status:
+        | "draft"
+        | "queued"
+        | "running"
+        | "completed"
+        | "failed"
+        | "canceled"
+      subscription_status:
+        | "trialing"
+        | "active"
+        | "past_due"
+        | "canceled"
+        | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +494,31 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      billing_cycle: ["monthly", "annual"],
+      credit_transaction_type: [
+        "plan_renewal",
+        "purchase",
+        "usage",
+        "refund",
+        "bonus",
+      ],
+      lead_funnel_status: ["new", "contacted", "proposal", "closed", "lost"],
+      search_status: [
+        "draft",
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "canceled",
+      ],
+      subscription_status: [
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "expired",
+      ],
+    },
   },
 } as const
