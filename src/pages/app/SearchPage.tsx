@@ -133,9 +133,9 @@ function WizardContent() {
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         ) : (
-          <Button onClick={handleSubmit} disabled={!canNext()} variant="hero">
-            <Rocket className="h-4 w-4 mr-1" />
-            Iniciar Busca
+          <Button onClick={handleSubmit} disabled={!canNext() || submitting} variant="hero">
+            {submitting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Rocket className="h-4 w-4 mr-1" />}
+            {submitting ? "Criando..." : "Iniciar Busca"}
           </Button>
         )}
       </div>
