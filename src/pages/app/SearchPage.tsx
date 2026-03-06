@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WizardProvider, useWizard } from "@/components/search/SearchWizardContext";
 import StepBusinessType from "@/components/search/StepBusinessType";
@@ -7,9 +8,10 @@ import StepFilters from "@/components/search/StepFilters";
 import StepReview from "@/components/search/StepReview";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Rocket } from "lucide-react";
+import { ArrowLeft, ArrowRight, Rocket, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 const STEPS = [
   { label: "Negócio", component: StepBusinessType },
@@ -22,6 +24,7 @@ const STEPS = [
 function WizardContent() {
   const { step, setStep, data } = useWizard();
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
   const StepComponent = STEPS[step].component;
   const progress = ((step + 1) / STEPS.length) * 100;
 
@@ -32,11 +35,50 @@ function WizardContent() {
     return true;
   };
 
-  const handleSubmit = () => {
-    toast.success("Busca criada com sucesso! Processamento iniciado.", {
-      description: "Você será notificado quando os resultados estiverem prontos.",
-    });
-    navigate("/app");
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user?.id;
+      if (!userId) {
+        toast.error("Você precisa estar logado para criar uma busca.");
+        navigate("/login");
+        return;
+      }
+
+      const filters: Record<string, boolean> = {};
+      if (data.hasEmail) filters.hasEmail = true;
+      if (data.hasPhone) filters.hasPhone = true;
+      if (data.hasWebsite) filters.hasWebsite = true;
+      if (data.hasSocialMedia) filters.hasSocialMedia = true;
+
+      const estimatedCredits = data.sources.length * (data.nationwide ? 50 : 10);
+
+      const { error } = await supabase.from("searches").insert({
+        user_id: userId,
+        business_type: data.businessType,
+        nationwide: data.nationwide,
+        location_state: data.state || null,
+        location_city: data.city || null,
+        location_radius: data.radius,
+        sources: data.sources,
+        filters,
+        credits_estimated: estimatedCredits,
+        name: data.searchName || null,
+        status: "queued",
+      });
+
+      if (error) throw error;
+
+      toast.success("Busca criada com sucesso! Processamento iniciado.", {
+        description: "Você será notificado quando os resultados estiverem prontos.",
+      });
+      navigate("/app");
+    } catch (err: any) {
+      toast.error("Erro ao criar busca", { description: err.message });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -91,9 +133,9 @@ function WizardContent() {
             <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         ) : (
-          <Button onClick={handleSubmit} disabled={!canNext()} variant="hero">
-            <Rocket className="h-4 w-4 mr-1" />
-            Iniciar Busca
+          <Button onClick={handleSubmit} disabled={!canNext() || submitting} variant="hero">
+            {submitting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Rocket className="h-4 w-4 mr-1" />}
+            {submitting ? "Criando..." : "Iniciar Busca"}
           </Button>
         )}
       </div>
