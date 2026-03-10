@@ -52,9 +52,7 @@ function WizardContent() {
       if (data.hasWebsite) filters.hasWebsite = true;
       if (data.hasSocialMedia) filters.hasSocialMedia = true;
 
-      const bothSources = data.sources.includes("redes_sociais") && data.sources.includes("cnpj");
-      const baseCredits = data.sources.length * (data.nationwide ? 50 : 10);
-      const estimatedCredits = bothSources ? Math.ceil(baseCredits * 1.5) : baseCredits;
+      const estimatedCredits = data.nationwide ? 50 : 10;
 
       const { data: insertedSearch, error } = await supabase.from("searches").insert({
         user_id: userId,
