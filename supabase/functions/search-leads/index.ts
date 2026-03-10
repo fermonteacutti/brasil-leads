@@ -376,13 +376,46 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Total leads collected: ${allLeads.length}`);
+    // ── Deduplication ──────────────────────────────────────────────────
+    // 1. Dedupe within batch (same company_name + city)
+    const seen = new Set<string>();
+    const uniqueLeads = allLeads.filter((l) => {
+      const key = `${(l.company_name || "").toLowerCase().trim()}|${(l.city || "").toLowerCase().trim()}|${(l.phone || "").trim()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    console.log(`Total leads collected: ${allLeads.length}, after dedup: ${uniqueLeads.length}`);
+
+    // 2. Dedupe against existing leads in DB for this user
+    let leadsToInsert = uniqueLeads;
+    if (uniqueLeads.length > 0) {
+      const { data: existing } = await supabase
+        .from("leads")
+        .select("company_name, city, phone")
+        .eq("user_id", user.id);
+
+      if (existing && existing.length > 0) {
+        const existingKeys = new Set(
+          existing.map(
+            (e: any) =>
+              `${(e.company_name || "").toLowerCase().trim()}|${(e.city || "").toLowerCase().trim()}|${(e.phone || "").trim()}`
+          )
+        );
+        leadsToInsert = uniqueLeads.filter((l) => {
+          const key = `${(l.company_name || "").toLowerCase().trim()}|${(l.city || "").toLowerCase().trim()}|${(l.phone || "").trim()}`;
+          return !existingKeys.has(key);
+        });
+      }
+      console.log(`After DB dedup: ${leadsToInsert.length} new leads to insert`);
+    }
 
     let leadsInserted = 0;
-    if (allLeads.length > 0) {
+    if (leadsToInsert.length > 0) {
       const { data: inserted, error: insertError } = await supabase
         .from("leads")
-        .insert(allLeads)
+        .insert(leadsToInsert)
         .select("id");
 
       if (insertError) {
