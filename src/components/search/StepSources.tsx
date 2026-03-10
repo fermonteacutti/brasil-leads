@@ -6,15 +6,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 const SOURCES = [
   {
     value: "redes_sociais",
-    label: "Redes Sociais",
-    description: "Google Maps, Instagram e Facebook",
+    label: "Google Maps",
+    description: "Busca por estabelecimentos no Google Maps",
     icon: Globe,
+    disabled: false,
   },
   {
     value: "cnpj",
     label: "Base CNPJ",
-    description: "Receita Federal / dados públicos",
+    description: "Em breve",
     icon: Database,
+    disabled: true,
   },
 ];
 
