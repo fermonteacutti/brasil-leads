@@ -6,7 +6,9 @@ import { CheckCircle2, MapPin, Database, Filter, Zap } from "lucide-react";
 export default function StepReview() {
   const { data } = useWizard();
 
-  const estimatedCredits = data.sources.length * (data.nationwide ? 50 : 10);
+  const bothSources = data.sources.includes("redes_sociais") && data.sources.includes("cnpj");
+  const baseCredits = data.sources.length * (data.nationwide ? 50 : 10);
+  const estimatedCredits = bothSources ? Math.ceil(baseCredits * 1.5) : baseCredits;
 
   return (
     <div className="space-y-6">
