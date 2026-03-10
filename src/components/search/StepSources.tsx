@@ -30,7 +30,7 @@ export default function StepSources() {
     updateData({ sources: next });
   };
 
-  const bothSelected = data.sources.includes("redes_sociais") && data.sources.includes("cnpj");
+  
 
   return (
     <div className="space-y-6">
