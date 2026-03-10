@@ -69,15 +69,6 @@ export default function StepSources() {
         })}
       </div>
 
-      {bothSelected && (
-        <div className="rounded-lg bg-accent/50 border border-accent p-3">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Ambas as fontes selecionadas:</span>{" "}
-            o custo por lead gerado será acrescido ao utilizar as duas bases simultaneamente.
-          </p>
-        </div>
-      )}
-
       <p className="text-xs text-muted-foreground">
         {data.sources.length} fonte{data.sources.length !== 1 && "s"} selecionada{data.sources.length !== 1 && "s"}
       </p>
