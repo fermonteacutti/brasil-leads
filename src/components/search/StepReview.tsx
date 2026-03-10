@@ -6,7 +6,9 @@ import { CheckCircle2, MapPin, Database, Filter, Zap } from "lucide-react";
 export default function StepReview() {
   const { data } = useWizard();
 
-  const estimatedCredits = data.sources.length * (data.nationwide ? 50 : 10);
+  const bothSources = data.sources.includes("redes_sociais") && data.sources.includes("cnpj");
+  const baseCredits = data.sources.length * (data.nationwide ? 50 : 10);
+  const estimatedCredits = bothSources ? Math.ceil(baseCredits * 1.5) : baseCredits;
 
   return (
     <div className="space-y-6">
@@ -49,7 +51,11 @@ export default function StepReview() {
             <p className="text-xs text-muted-foreground">Fontes</p>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {data.sources.length > 0
-                ? data.sources.map((s) => <Badge key={s} variant="secondary" className="text-xs capitalize">{s.replace("_", " ")}</Badge>)
+                ? data.sources.map((s) => (
+                  <Badge key={s} variant="secondary" className="text-xs">
+                    {s === "redes_sociais" ? "Redes Sociais" : s === "cnpj" ? "Base CNPJ" : s.replace("_", " ")}
+                  </Badge>
+                ))
                 : <span className="text-sm text-muted-foreground">Nenhuma selecionada</span>}
             </div>
           </div>

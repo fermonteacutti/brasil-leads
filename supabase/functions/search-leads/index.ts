@@ -18,6 +18,16 @@ const CNAE_MAP: Record<string, string[]> = {
   "Outros": [],
 };
 
+// Source mapping: UI source → internal sub-sources
+const SOURCE_MAP: Record<string, string[]> = {
+  redes_sociais: ["google_maps", "instagram", "facebook"],
+  cnpj: ["cnpj"],
+  // Legacy direct values
+  google_maps: ["google_maps"],
+  instagram: ["instagram"],
+  facebook: ["facebook"],
+};
+
 interface SearchPayload {
   search_id: string;
 }
@@ -125,15 +135,32 @@ async function searchGoogleMaps(
   });
 }
 
-// ── Base CNPJ source (Casa dos Dados public API) ────────────────────
+// ── CNPJ source with fallback APIs ──────────────────────────────────
 async function searchCNPJ(
   search: any,
   userId: string,
   searchId: string
 ): Promise<LeadInsert[]> {
-  const cnaeCodes = CNAE_MAP[search.business_type] || [];
+  // Try APIs in order: Casa dos Dados → OpenCNPJ → CNPJ.ws
+  let leads = await searchCNPJ_CasaDosDados(search, userId, searchId);
+  if (leads.length > 0) return leads;
 
-  // If we have no CNAE codes and a custom business type, try a term search
+  console.log("Casa dos Dados returned 0 results, trying OpenCNPJ...");
+  leads = await searchCNPJ_OpenCNPJ(search, userId, searchId);
+  if (leads.length > 0) return leads;
+
+  console.log("OpenCNPJ returned 0 results, trying CNPJ.ws...");
+  leads = await searchCNPJ_CnpjWs(search, userId, searchId);
+  return leads;
+}
+
+// ── Casa dos Dados ──────────────────────────────────────────────────
+async function searchCNPJ_CasaDosDados(
+  search: any,
+  userId: string,
+  searchId: string
+): Promise<LeadInsert[]> {
+  const cnaeCodes = CNAE_MAP[search.business_type] || [];
   const termo = cnaeCodes.length === 0 ? [search.business_type] : [];
 
   const body: Record<string, unknown> = {
@@ -142,9 +169,7 @@ async function searchCNPJ(
       atividade_principal: cnaeCodes,
       natureza_juridica: [],
       uf: search.nationwide ? [] : search.location_state ? [search.location_state] : [],
-      municipio: search.location_city
-        ? [search.location_city.toUpperCase()]
-        : [],
+      municipio: search.location_city ? [search.location_city.toUpperCase()] : [],
       situacao_cadastral: "ATIVA",
     },
     range_query: {},
@@ -162,66 +187,174 @@ async function searchCNPJ(
     page: 1,
   };
 
-  console.log("CNPJ search body:", JSON.stringify(body));
+  try {
+    const response = await fetch(
+      "https://api.casadosdados.com.br/v2/public/cnpj/search",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
 
-  const response = await fetch(
-    "https://api.casadosdados.com.br/v2/public/cnpj/search",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Casa dos Dados API error [${response.status}]: ${errText}`);
+      return [];
     }
-  );
 
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error(`Casa dos Dados API error [${response.status}]: ${errText}`);
+    const data = await response.json();
+    const companies = data.data?.cnpj || [];
+    console.log(`Casa dos Dados returned ${companies.length} results`);
+
+    return companies.map((c: any) => mapCnpjCompanyToLead(c, userId, searchId, search.business_type));
+  } catch (err) {
+    console.error("Casa dos Dados fetch error:", err);
     return [];
   }
+}
 
-  const data = await response.json();
-  const companies = data.data?.cnpj || [];
+// ── OpenCNPJ.org ────────────────────────────────────────────────────
+async function searchCNPJ_OpenCNPJ(
+  search: any,
+  userId: string,
+  searchId: string
+): Promise<LeadInsert[]> {
+  try {
+    const cnaeCodes = CNAE_MAP[search.business_type] || [];
+    const params = new URLSearchParams();
 
-  console.log(`CNPJ source returned ${companies.length} results`);
+    if (cnaeCodes.length > 0) {
+      params.set("cnae", cnaeCodes[0]);
+    }
+    if (!search.nationwide && search.location_state) {
+      params.set("uf", search.location_state);
+    }
+    if (search.location_city) {
+      params.set("municipio", search.location_city.toUpperCase());
+    }
+    params.set("situacao", "ATIVA");
+    params.set("limit", "20");
 
-  return companies.map((c: any) => {
-    const cnpjFormatted = c.cnpj || null;
-    const razaoSocial = c.razao_social || c.nome_fantasia || null;
-    const nomeFantasia = c.nome_fantasia || c.razao_social || null;
+    const url = `https://api.opencnpj.org/v1/empresas?${params.toString()}`;
+    const response = await fetch(url, {
+      headers: { "Accept": "application/json" },
+    });
 
-    // Build address
-    const addressParts = [
-      c.logradouro,
-      c.numero,
-      c.complemento,
-      c.bairro,
-    ].filter(Boolean);
-    const address = addressParts.length > 0 ? addressParts.join(", ") : null;
-
-    // Build phone from DDD + telefone
-    let phone = null;
-    if (c.ddd_telefone_1) {
-      phone = c.ddd_telefone_1;
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`OpenCNPJ API error [${response.status}]: ${errText}`);
+      return [];
     }
 
-    return {
-      user_id: userId,
-      search_id: searchId,
-      company_name: nomeFantasia || razaoSocial,
-      address,
-      phone,
-      website: null,
-      email: c.email || null,
-      cnpj: cnpjFormatted,
-      city: c.municipio || null,
-      state: c.uf || null,
-      source: "cnpj",
-      segment: search.business_type,
-      raw_data: c,
-      funnel_status: "new",
-      verification_status: "pending",
-    };
-  });
+    const data = await response.json();
+    const companies = Array.isArray(data) ? data : data.data || data.results || [];
+    console.log(`OpenCNPJ returned ${companies.length} results`);
+
+    return companies.map((c: any) => mapCnpjCompanyToLead(c, userId, searchId, search.business_type));
+  } catch (err) {
+    console.error("OpenCNPJ fetch error:", err);
+    return [];
+  }
+}
+
+// ── CNPJ.ws ─────────────────────────────────────────────────────────
+async function searchCNPJ_CnpjWs(
+  search: any,
+  userId: string,
+  searchId: string
+): Promise<LeadInsert[]> {
+  try {
+    const cnaeCodes = CNAE_MAP[search.business_type] || [];
+    const params = new URLSearchParams();
+
+    if (cnaeCodes.length > 0) {
+      params.set("atividade_principal", cnaeCodes.join(","));
+    }
+    if (!search.nationwide && search.location_state) {
+      params.set("uf", search.location_state);
+    }
+    if (search.location_city) {
+      params.set("municipio", search.location_city.toUpperCase());
+    }
+    params.set("situacao_cadastral", "ATIVA");
+    params.set("limit", "20");
+
+    const url = `https://publica.cnpj.ws/cnpj/search?${params.toString()}`;
+    const response = await fetch(url, {
+      headers: { "Accept": "application/json" },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`CNPJ.ws API error [${response.status}]: ${errText}`);
+      return [];
+    }
+
+    const data = await response.json();
+    const companies = Array.isArray(data) ? data : data.data || data.results || [];
+    console.log(`CNPJ.ws returned ${companies.length} results`);
+
+    return companies.map((c: any) => mapCnpjCompanyToLead(c, userId, searchId, search.business_type));
+  } catch (err) {
+    console.error("CNPJ.ws fetch error:", err);
+    return [];
+  }
+}
+
+// ── Shared CNPJ data mapper ────────────────────────────────────────
+function mapCnpjCompanyToLead(
+  c: any,
+  userId: string,
+  searchId: string,
+  businessType: string
+): LeadInsert {
+  const cnpjFormatted = c.cnpj || null;
+  const razaoSocial = c.razao_social || c.nome_fantasia || null;
+  const nomeFantasia = c.nome_fantasia || c.razao_social || null;
+
+  const addressParts = [
+    c.logradouro,
+    c.numero,
+    c.complemento,
+    c.bairro,
+  ].filter(Boolean);
+  const address = addressParts.length > 0 ? addressParts.join(", ") : null;
+
+  let phone = null;
+  if (c.ddd_telefone_1) {
+    phone = c.ddd_telefone_1;
+  } else if (c.telefone) {
+    phone = c.telefone;
+  }
+
+  return {
+    user_id: userId,
+    search_id: searchId,
+    company_name: nomeFantasia || razaoSocial,
+    address,
+    phone,
+    website: null,
+    email: c.email || c.email_responsavel || null,
+    cnpj: cnpjFormatted,
+    city: c.municipio || c.cidade || null,
+    state: c.uf || c.estado || null,
+    source: "cnpj",
+    segment: businessType,
+    raw_data: c,
+    funnel_status: "new",
+    verification_status: "pending",
+  };
+}
+
+// ── Expand UI sources to internal sub-sources ───────────────────────
+function expandSources(sources: string[]): Set<string> {
+  const expanded = new Set<string>();
+  for (const s of sources) {
+    const mapped = SOURCE_MAP[s] || [s];
+    for (const sub of mapped) expanded.add(sub);
+  }
+  return expanded;
 }
 
 // ── Main handler ────────────────────────────────────────────────────
@@ -234,7 +367,6 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Validate auth
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization" }), {
@@ -245,7 +377,6 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get user from token
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     if (userError || !user) {
@@ -257,7 +388,6 @@ Deno.serve(async (req) => {
 
     const { search_id } = (await req.json()) as SearchPayload;
 
-    // Get search record
     const { data: search, error: searchError } = await supabase
       .from("searches")
       .select("*")
@@ -272,30 +402,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update status to running
     await supabase
       .from("searches")
       .update({ status: "running", started_at: new Date().toISOString() })
       .eq("id", search_id);
 
-    const sources: string[] = search.sources || [];
-    console.log(`Processing search ${search_id} with sources: ${sources.join(", ")}`);
+    const uiSources: string[] = search.sources || [];
+    const internalSources = expandSources(uiSources);
+    console.log(`Processing search ${search_id} with sources: ${[...internalSources].join(", ")}`);
 
-    // Collect leads from all selected sources in parallel
     const sourcePromises: Promise<LeadInsert[]>[] = [];
 
-    if (sources.includes("google_maps")) {
+    if (internalSources.has("google_maps")) {
       sourcePromises.push(searchGoogleMaps(search, user.id, search_id));
     }
-    if (sources.includes("cnpj")) {
+    if (internalSources.has("cnpj")) {
       sourcePromises.push(searchCNPJ(search, user.id, search_id));
     }
-
-    // Future sources would be added here:
-    // if (sources.includes("instagram")) { ... }
-    // if (sources.includes("facebook")) { ... }
-    // if (sources.includes("linkedin")) { ... }
-    // if (sources.includes("websites")) { ... }
+    // Future: instagram, facebook handlers
 
     const results = await Promise.allSettled(sourcePromises);
     const allLeads: LeadInsert[] = [];
@@ -310,7 +434,6 @@ Deno.serve(async (req) => {
 
     console.log(`Total leads collected: ${allLeads.length}`);
 
-    // Insert all leads
     let leadsInserted = 0;
     if (allLeads.length > 0) {
       const { data: inserted, error: insertError } = await supabase
@@ -325,14 +448,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update search as completed
+    // Credit multiplier: both sources selected = 1.5x per lead
+    const bothSources = uiSources.includes("redes_sociais") && uiSources.includes("cnpj");
+    const creditsUsed = bothSources ? Math.ceil(leadsInserted * 1.5) : leadsInserted;
+
     await supabase
       .from("searches")
       .update({
         status: "completed",
         completed_at: new Date().toISOString(),
         leads_found: leadsInserted,
-        credits_used: leadsInserted,
+        credits_used: creditsUsed,
       })
       .eq("id", search_id);
 
@@ -340,6 +466,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         leads_found: leadsInserted,
+        credits_used: creditsUsed,
         search_id,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
