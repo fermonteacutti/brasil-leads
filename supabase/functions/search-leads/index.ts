@@ -141,77 +141,13 @@ async function searchCNPJ(
   userId: string,
   searchId: string
 ): Promise<LeadInsert[]> {
-  // Try APIs in order: Casa dos Dados → OpenCNPJ → CNPJ.ws
-  let leads = await searchCNPJ_CasaDosDados(search, userId, searchId);
-  if (leads.length > 0) return leads;
-
-  console.log("Casa dos Dados returned 0 results, trying OpenCNPJ...");
-  leads = await searchCNPJ_OpenCNPJ(search, userId, searchId);
+  // Try APIs in order: OpenCNPJ → CNPJ.ws
+  let leads = await searchCNPJ_OpenCNPJ(search, userId, searchId);
   if (leads.length > 0) return leads;
 
   console.log("OpenCNPJ returned 0 results, trying CNPJ.ws...");
   leads = await searchCNPJ_CnpjWs(search, userId, searchId);
   return leads;
-}
-
-// ── Casa dos Dados ──────────────────────────────────────────────────
-async function searchCNPJ_CasaDosDados(
-  search: any,
-  userId: string,
-  searchId: string
-): Promise<LeadInsert[]> {
-  const cnaeCodes = CNAE_MAP[search.business_type] || [];
-  const termo = cnaeCodes.length === 0 ? [search.business_type] : [];
-
-  const body: Record<string, unknown> = {
-    query: {
-      termo,
-      atividade_principal: cnaeCodes,
-      natureza_juridica: [],
-      uf: search.nationwide ? [] : search.location_state ? [search.location_state] : [],
-      municipio: search.location_city ? [search.location_city.toUpperCase()] : [],
-      situacao_cadastral: "ATIVA",
-    },
-    range_query: {},
-    extras: {
-      somente_mei: false,
-      excluir_mei: false,
-      com_email: false,
-      incluir_atividade_secundaria: false,
-      com_contato_telefonico: false,
-      somente_fixo: false,
-      somente_celular: false,
-      somente_matriz: false,
-      somente_filial: false,
-    },
-    page: 1,
-  };
-
-  try {
-    const response = await fetch(
-      "https://api.casadosdados.com.br/v2/public/cnpj/search",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`Casa dos Dados API error [${response.status}]: ${errText}`);
-      return [];
-    }
-
-    const data = await response.json();
-    const companies = data.data?.cnpj || [];
-    console.log(`Casa dos Dados returned ${companies.length} results`);
-
-    return companies.map((c: any) => mapCnpjCompanyToLead(c, userId, searchId, search.business_type));
-  } catch (err) {
-    console.error("Casa dos Dados fetch error:", err);
-    return [];
-  }
 }
 
 // ── OpenCNPJ.org ────────────────────────────────────────────────────
