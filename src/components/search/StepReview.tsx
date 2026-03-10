@@ -51,7 +51,11 @@ export default function StepReview() {
             <p className="text-xs text-muted-foreground">Fontes</p>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {data.sources.length > 0
-                ? data.sources.map((s) => <Badge key={s} variant="secondary" className="text-xs capitalize">{s.replace("_", " ")}</Badge>)
+                ? data.sources.map((s) => (
+                  <Badge key={s} variant="secondary" className="text-xs">
+                    {s === "redes_sociais" ? "Redes Sociais" : s === "cnpj" ? "Base CNPJ" : s.replace("_", " ")}
+                  </Badge>
+                ))
                 : <span className="text-sm text-muted-foreground">Nenhuma selecionada</span>}
             </div>
           </div>
