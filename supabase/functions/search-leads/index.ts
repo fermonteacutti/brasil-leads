@@ -104,13 +104,21 @@ async function searchGoogleMaps(
   const places = placesData.places || [];
 
   return places.map((place: any) => {
-    const addressParts = (place.formattedAddress || "")
-      .split(",")
-      .map((s: string) => s.trim());
-    const city =
-      addressParts.length >= 3 ? addressParts[addressParts.length - 3] : null;
-    const state =
-      addressParts.length >= 2 ? addressParts[addressParts.length - 2] : null;
+    // Brazilian addresses: "Rua X, 123 - Bairro, Cidade - UF, CEP, Brasil"
+    const addr = place.formattedAddress || "";
+    let city: string | null = null;
+    let state: string | null = null;
+
+    // Find the "Cidade - UF" segment (second-to-last or third-to-last comma part)
+    const parts = addr.split(",").map((s: string) => s.trim());
+    for (const part of parts) {
+      const match = part.match(/^(.+?)\s*-\s*([A-Z]{2})$/);
+      if (match) {
+        city = match[1].trim();
+        state = match[2].trim();
+        break;
+      }
+    }
 
     return {
       user_id: userId,
