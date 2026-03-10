@@ -1,13 +1,46 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Radar, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Radar, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(searchParams.get("cadastro") === "true");
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName } },
+        });
+        if (error) throw error;
+        toast.success("Conta criada com sucesso!");
+        navigate("/app");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        toast.success("Login realizado!");
+        navigate("/app");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao autenticar");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 py-12 px-4">
@@ -45,13 +78,13 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             {isSignUp && (
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Nome completo</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" placeholder="Seu nome" />
+                  <Input className="pl-10" placeholder="Seu nome" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
               </div>
             )}
@@ -59,14 +92,14 @@ export default function LoginPage() {
               <label className="text-sm font-medium mb-1.5 block">E-mail</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-10" type="email" placeholder="seu@email.com" />
+                <Input className="pl-10" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Senha</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-10" type="password" placeholder="••••••••" />
+                <Input className="pl-10" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
               </div>
             </div>
 
@@ -82,8 +115,9 @@ export default function LoginPage() {
               </label>
             )}
 
-            <Button variant="hero" className="w-full" type="submit">
-              {isSignUp ? "Criar Conta Grátis" : "Entrar"} <ArrowRight className="h-4 w-4 ml-1" />
+            <Button variant="hero" className="w-full" type="submit" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {isSignUp ? "Criar Conta Grátis" : "Entrar"} {!loading && <ArrowRight className="h-4 w-4 ml-1" />}
             </Button>
           </form>
 
