@@ -54,7 +54,7 @@ function WizardContent() {
 
       const estimatedCredits = data.sources.length * (data.nationwide ? 50 : 10);
 
-      const { error } = await supabase.from("searches").insert({
+      const { data: insertedSearch, error } = await supabase.from("searches").insert({
         user_id: userId,
         business_type: data.businessType,
         nationwide: data.nationwide,
@@ -66,14 +66,24 @@ function WizardContent() {
         credits_estimated: estimatedCredits,
         name: data.searchName || null,
         status: "queued",
+      }).select("id").single();
+
+      if (error || !insertedSearch) throw error || new Error("Falha ao criar busca");
+
+      toast.info("Busca criada! Buscando leads no Google Maps...");
+
+      // Invoke edge function to search leads
+      const { data: result, error: fnError } = await supabase.functions.invoke("search-leads", {
+        body: { search_id: insertedSearch.id },
       });
 
-      if (error) throw error;
+      if (fnError) {
+        toast.error("Erro ao buscar leads", { description: fnError.message });
+      } else {
+        toast.success(`Busca concluída! ${result?.leads_found || 0} leads encontrados.`);
+      }
 
-      toast.success("Busca criada com sucesso! Processamento iniciado.", {
-        description: "Você será notificado quando os resultados estiverem prontos.",
-      });
-      navigate("/app");
+      navigate("/app/leads");
     } catch (err: any) {
       toast.error("Erro ao criar busca", { description: err.message });
     } finally {
