@@ -43,6 +43,9 @@ interface LeadInsert {
   cnpj: string | null;
   city: string | null;
   state: string | null;
+  linkedin_url: string | null;
+  instagram_url: string | null;
+  facebook_url: string | null;
   source: string;
   segment: string;
   raw_data: unknown;
@@ -50,7 +53,67 @@ interface LeadInsert {
   verification_status: string;
 }
 
-// ── Google Maps source ──────────────────────────────────────────────
+// Max pages to fetch from Google Places (each page = up to 20 results)
+const MAX_PAGES = 5; // = up to 100 leads per search
+
+// ── Extract social media links from a website ───────────────────────
+async function extractSocialLinks(websiteUrl: string): Promise<{
+  instagram: string | null;
+  facebook: string | null;
+  linkedin: string | null;
+}> {
+  const result = { instagram: null as string | null, facebook: null as string | null, linkedin: null as string | null };
+  if (!websiteUrl) return result;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(websiteUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; BuscaLead/1.0)" },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return result;
+
+    const html = await response.text();
+
+    const igMatch = html.match(/https?:\/\/(?:www\.)?instagram\.com\/[a-zA-Z0-9_.]+\/?/);
+    if (igMatch) result.instagram = igMatch[0];
+
+    const fbMatch = html.match(/https?:\/\/(?:www\.)?facebook\.com\/[a-zA-Z0-9_.]+\/?/);
+    if (fbMatch) result.facebook = fbMatch[0];
+
+    const liMatch = html.match(/https?:\/\/(?:www\.)?linkedin\.com\/(?:company|in)\/[a-zA-Z0-9_-]+\/?/);
+    if (liMatch) result.linkedin = liMatch[0];
+  } catch {
+    // Timeout or fetch error — skip silently
+  }
+
+  return result;
+}
+
+// ── Parse city/state from Brazilian address ─────────────────────────
+function parseCityState(formattedAddress: string): { city: string | null; state: string | null } {
+  let city: string | null = null;
+  let state: string | null = null;
+
+  const parts = formattedAddress.split(",").map((s: string) => s.trim());
+  for (const part of parts) {
+    const match = part.match(/^(.+?)\s*-\s*([A-Z]{2})$/);
+    if (match) {
+      city = match[1].trim();
+      state = match[2].trim();
+      break;
+    }
+  }
+
+  return { city, state };
+}
+
+// ── Google Maps source (with pagination) ────────────────────────────
 async function searchGoogleMaps(
   search: any,
   userId: string,
@@ -70,73 +133,109 @@ async function searchGoogleMaps(
     textQuery += " no Brasil";
   }
 
-  const placesBody: Record<string, unknown> = {
-    textQuery,
-    languageCode: "pt-BR",
-    maxResultCount: 20,
-  };
+  const FIELD_MASK = [
+    "places.displayName",
+    "places.formattedAddress",
+    "places.shortFormattedAddress",
+    "places.nationalPhoneNumber",
+    "places.internationalPhoneNumber",
+    "places.websiteUri",
+    "places.googleMapsUri",
+    "places.businessStatus",
+    "places.types",
+    "places.rating",
+    "places.userRatingCount",
+    "nextPageToken",
+  ].join(",");
 
-  if (!search.nationwide && search.location_state) {
-    placesBody.regionCode = "BR";
-  }
+  const allPlaces: any[] = [];
+  let pageToken: string | undefined = undefined;
 
-  const placesResponse = await fetch(
-    "https://places.googleapis.com/v1/places:searchText",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
-        "X-Goog-FieldMask":
-          "places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.businessStatus,places.types,places.shortFormattedAddress",
-      },
-      body: JSON.stringify(placesBody),
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const placesBody: Record<string, unknown> = {
+      textQuery,
+      languageCode: "pt-BR",
+      maxResultCount: 20,
+    };
+
+    if (!search.nationwide && search.location_state) {
+      placesBody.regionCode = "BR";
     }
-  );
 
-  if (!placesResponse.ok) {
-    const errBody = await placesResponse.text();
-    console.error(`Google Places API error [${placesResponse.status}]: ${errBody}`);
-    return [];
-  }
+    if (pageToken) {
+      placesBody.pageToken = pageToken;
+    }
 
-  const placesData = await placesResponse.json();
-  const places = placesData.places || [];
-
-  return places.map((place: any) => {
-    // Brazilian addresses: "Rua X, 123 - Bairro, Cidade - UF, CEP, Brasil"
-    const addr = place.formattedAddress || "";
-    let city: string | null = null;
-    let state: string | null = null;
-
-    // Find the "Cidade - UF" segment (second-to-last or third-to-last comma part)
-    const parts = addr.split(",").map((s: string) => s.trim());
-    for (const part of parts) {
-      const match = part.match(/^(.+?)\s*-\s*([A-Z]{2})$/);
-      if (match) {
-        city = match[1].trim();
-        state = match[2].trim();
-        break;
+    const placesResponse = await fetch(
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": GOOGLE_PLACES_API_KEY,
+          "X-Goog-FieldMask": FIELD_MASK,
+        },
+        body: JSON.stringify(placesBody),
       }
+    );
+
+    if (!placesResponse.ok) {
+      const errBody = await placesResponse.text();
+      console.error(`Google Places API error [${placesResponse.status}]: ${errBody}`);
+      break;
     }
+
+    const placesData = await placesResponse.json();
+    const places = placesData.places || [];
+    allPlaces.push(...places);
+
+    console.log(`Google Places page ${page + 1}: ${places.length} results (total: ${allPlaces.length})`);
+
+    // Check if there's a next page
+    if (placesData.nextPageToken) {
+      pageToken = placesData.nextPageToken;
+    } else {
+      break; // No more pages
+    }
+  }
+
+  console.log(`Google Places total: ${allPlaces.length} places found`);
+
+  // Extract social links from websites (parallel, with concurrency limit)
+  const CONCURRENCY = 5;
+  const socialResults: Map<number, Awaited<ReturnType<typeof extractSocialLinks>>> = new Map();
+
+  for (let i = 0; i < allPlaces.length; i += CONCURRENCY) {
+    const batch = allPlaces.slice(i, i + CONCURRENCY);
+    const promises = batch.map((place, idx) =>
+      extractSocialLinks(place.websiteUri || "").then((links) => {
+        socialResults.set(i + idx, links);
+      })
+    );
+    await Promise.allSettled(promises);
+  }
+
+  return allPlaces.map((place: any, idx: number) => {
+    const { city, state } = parseCityState(place.formattedAddress || "");
+    const social = socialResults.get(idx) || { instagram: null, facebook: null, linkedin: null };
 
     return {
       user_id: userId,
       search_id: searchId,
       company_name: place.displayName?.text || null,
       address: place.formattedAddress || null,
-      phone:
-        place.nationalPhoneNumber ||
-        place.internationalPhoneNumber ||
-        null,
+      phone: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
       website: place.websiteUri || null,
       email: null,
       cnpj: null,
       city,
       state,
+      linkedin_url: social.linkedin,
+      instagram_url: social.instagram,
+      facebook_url: social.facebook,
       source: "google_maps",
       segment: search.business_type,
-      raw_data: place,
+      raw_data: { ...place, rating: place.rating || null, userRatingCount: place.userRatingCount || null },
       funnel_status: "new",
       verification_status: "pending",
     };
@@ -283,6 +382,9 @@ function mapCnpjCompanyToLead(
     cnpj: cnpjFormatted,
     city: c.municipio || c.cidade || null,
     state: c.uf || c.estado || null,
+    linkedin_url: null,
+    instagram_url: null,
+    facebook_url: null,
     source: "cnpj",
     segment: businessType,
     raw_data: c,
