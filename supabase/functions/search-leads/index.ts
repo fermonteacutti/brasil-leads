@@ -143,8 +143,6 @@ async function searchGoogleMaps(
     "places.googleMapsUri",
     "places.businessStatus",
     "places.types",
-    "places.rating",
-    "places.userRatingCount",
     "nextPageToken",
   ].join(",");
 
@@ -235,7 +233,7 @@ async function searchGoogleMaps(
       facebook_url: social.facebook,
       source: "google_maps",
       segment: search.business_type,
-      raw_data: { ...place, rating: place.rating || null, userRatingCount: place.userRatingCount || null },
+      raw_data: place,
       funnel_status: "new",
       verification_status: "pending",
     };
