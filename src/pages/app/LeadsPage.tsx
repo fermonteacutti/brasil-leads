@@ -109,7 +109,7 @@ export default function LeadsPage() {
         <LeadsFilterSidebar filters={filters} onChange={setFilters} />
 
         <div className="flex-1 space-y-4">
-          <LeadsTable leads={paginated} onStatusChange={handleStatusChange} />
+          <LeadsTable leads={paginated} onStatusChange={handleStatusChange} onLeadUpdated={fetchLeads} />
 
           {/* Pagination */}
           {totalPages > 1 && (
